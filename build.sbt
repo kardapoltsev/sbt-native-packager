@@ -21,7 +21,9 @@ ghpages.settings
 
 git.remoteRepo := "git@github.com:sbt/sbt-native-packager.git"
 
-publishTo := Some(Resolver.url("sbt-plugin-releases", new URL("http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases/"))(Resolver.ivyStylePatterns))
+credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
+
+publishTo := Some(Resolver.url("Frumatic snapshots", url("http://nexus.frumatic.com/content/repositories/snapshots"))(Resolver.ivyStylePatterns))
 
 publishMavenStyle := false
 
