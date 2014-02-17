@@ -7,6 +7,7 @@ import sbt._
 import sbt.Keys.{ target, mainClass, normalizedName, sourceDirectory }
 import SbtNativePackager._
 import com.typesafe.sbt.packager.linux.{ LinuxFileMetaData, LinuxPackageMapping, LinuxSymlink, LinuxPlugin }
+import com.typesafe.sbt.packager.debian.DebianPlugin
 
 /**
  * This class contains the default settings for creating and deploying an archetypical Java application.
@@ -20,6 +21,7 @@ import com.typesafe.sbt.packager.linux.{ LinuxFileMetaData, LinuxPackageMapping,
 object JavaServerAppPackaging {
   import ServerLoader._
   import LinuxPlugin.Users
+  import DebianPlugin.Names.{ Preinst, Postinst, Prerm, Postrm }
 
   def settings: Seq[Setting[_]] = JavaAppPackaging.settings ++ debianSettings
   protected def etcDefaultTemplateSource: java.net.URL = getClass.getResource("etc-default-template")
@@ -27,14 +29,13 @@ object JavaServerAppPackaging {
   def debianSettings: Seq[Setting[_]] =
     Seq(
       serverLoading := Upstart,
-      daemonUser := Users.Root,
+      daemonUser <<= appUser in Linux,
       // This one is begging for sbt 0.13 syntax...
-      debianStartScriptReplacements <<= (
+      debianScriptReplacements <<= (
         maintainer in Debian, packageSummary in Debian, serverLoading in Debian, daemonUser in Debian, normalizedName,
-        sbt.Keys.version, defaultLinuxInstallLocation, mainClass in Compile, scriptClasspath)
-        map { (author, descr, loader, daemonUser, name, version, installLocation, mainClass, cp) =>
+        sbt.Keys.version, defaultLinuxInstallLocation)
+        map { (author, descr, loader, daemonUser, name, version, installLocation) =>
           val appDir = installLocation + "/" + name
-          val appClasspath = cp.map(appDir + "/lib/" + _).mkString(":")
 
           JavaAppStartScript.makeReplacements(
             author = author,
@@ -42,95 +43,74 @@ object JavaServerAppPackaging {
             execScript = name,
             chdir = appDir,
             appName = name,
-            appClasspath = appClasspath,
-            appMainClass = mainClass.get,
             daemonUser = daemonUser)
         },
       // TODO - Default locations shouldn't be so hacky.
+
+      // === Startscript creation ===
       linuxStartScriptTemplate in Debian <<= (serverLoading in Debian, sourceDirectory) map { (loader, dir) =>
         JavaAppStartScript.defaultStartScriptTemplate(loader, dir / "templates" / "start")
       },
-      debianMakeStartScript <<= (debianStartScriptReplacements, normalizedName, target in Universal, linuxStartScriptTemplate in Debian)
-        map makeDebianStartScript,
-      linuxEtcDefaultTemplate in Debian <<= sourceDirectory map { dir =>
-        val overrideScript = dir / "templates" / "etc-default"
-        if(overrideScript.exists) overrideScript.toURI.toURL
-        else etcDefaultTemplateSource
-      },
-      debianMakeEtcDefault <<= (normalizedName, target in Universal, serverLoading in Debian, linuxEtcDefaultTemplate in Debian)
-        map makeEtcDefaultScript,
-      linuxPackageMappings in Debian <++= (debianMakeEtcDefault, normalizedName) map { (conf, name) =>
-        conf.map(c => LinuxPackageMapping(Seq(c -> ("/etc/default/" + name))).withConfig()).toSeq
-      },
-      linuxPackageMappings in Debian <++= (debianMakeStartScript, normalizedName, serverLoading in Debian)
-        map { (script, name, loader) =>
+      debianMakeStartScript <<= (target in Universal, serverLoading in Debian, debianScriptReplacements, linuxStartScriptTemplate in Debian)
+        map { (tmpDir, loader, replacements, template) =>
+          makeDebianMaintainerScript(JavaAppStartScript.startScript, Some(template))(tmpDir, loader, replacements)
+        },
+      linuxPackageMappings in Debian <++= (debianMakeStartScript, normalizedName, serverLoading in Debian, appUser in Linux, appGroup in Linux)
+        map { (script, name, loader, owner, ownerGroup) =>
           val (path, permissions) = loader match {
             case Upstart => ("/etc/init/" + name + ".conf", "0644")
             case SystemV => ("/etc/init.d/" + name, "0755")
           }
           for {
             s <- script.toSeq
-          } yield LinuxPackageMapping(Seq(s -> path)).withPerms(permissions).withConfig()
+          } yield LinuxPackageMapping(Seq(s -> path), LinuxFileMetaData(owner, ownerGroup, permissions, "true"))
         },
+
+      // === etc config mapping ===
+      bashScriptConfigLocation <<= normalizedName map (name => Some("/etc/default/" + name)),
+      linuxEtcDefaultTemplate in Debian <<= sourceDirectory map { dir =>
+        val overrideScript = dir / "templates" / "etc-default"
+        if (overrideScript.exists) overrideScript.toURI.toURL
+        else etcDefaultTemplateSource
+      },
+      debianMakeEtcDefault <<= (normalizedName, target in Universal, linuxEtcDefaultTemplate in Debian, debianScriptReplacements)
+        map makeEtcDefaultScript,
+      linuxPackageMappings in Debian <++= (debianMakeEtcDefault, normalizedName, appUser in Linux, appGroup in Linux) map { (conf, name, owner, ownerGroup) =>
+        conf.map(c => LinuxPackageMapping(Seq(c -> ("/etc/default/" + name)), LinuxFileMetaData(owner, ownerGroup)).withConfig()).toSeq
+      },
       // TODO should we specify daemonGroup in configs?
-      linuxPackageMappings in Debian <+= (normalizedName, defaultLinuxLogsLocation, target in Debian, daemonUser in Debian) map {
-        (name, logsDir, target, user) =>
+
+      // === logging directory mapping ===
+      linuxPackageMappings in Debian <+= (normalizedName, defaultLinuxLogsLocation, target in Debian, appUser in Linux, appGroup in Linux) map {
+        (name, logsDir, target, user, group) =>
           // create empty var/log directory
           val d = target / logsDir
           d.mkdirs()
-          LinuxPackageMapping(Seq(d -> (logsDir + "/" + name)), LinuxFileMetaData(user, user))
+          LinuxPackageMapping(Seq(d -> (logsDir + "/" + name)), LinuxFileMetaData(user, group))
       },
-      linuxPackageSymlinks in Debian <+= (normalizedName, defaultLinuxInstallLocation) map {
-        (name, install) => LinuxSymlink(install + "/" + name + "/logs", "/var/log/" + name)
+      linuxPackageSymlinks in Debian <+= (normalizedName, defaultLinuxInstallLocation, defaultLinuxLogsLocation) map {
+        (name, install, logsDir) => LinuxSymlink(install + "/" + name + "/logs", logsDir + "/" + name)
       },
-      // TODO - only make these if the upstart config exists...
-      debianMakePrermScript <<= (normalizedName, target in Universal) map makeDebianPrermScript,
-      debianMakePostrmScript <<= (normalizedName, target in Universal, serverLoading in Debian) map makeDebianPostrmScript,
-      debianMakePostinstScript <<= (normalizedName, target in Universal, serverLoading in Debian) map makeDebianPostinstScript)
 
-  private def makeDebianStartScript(
-    replacements: Seq[(String, String)], name: String, tmpDir: File, template: URL): Option[File] =
-    if (replacements.isEmpty) None
-    else {
-      val scriptBits = TemplateWriter.generateScript(template, replacements)
-      val script = tmpDir / "tmp" / "init" / name
+      // === Maintainer scripts === 
+      debianMakePreinstScript <<= (target in Universal, serverLoading in Debian, debianScriptReplacements) map makeDebianMaintainerScript(Preinst),
+      debianMakePostinstScript <<= (target in Universal, serverLoading in Debian, debianScriptReplacements) map makeDebianMaintainerScript(Postinst),
+      debianMakePrermScript <<= (target in Universal, serverLoading in Debian, debianScriptReplacements) map makeDebianMaintainerScript(Prerm),
+      debianMakePostrmScript <<= (target in Universal, serverLoading in Debian, debianScriptReplacements) map makeDebianMaintainerScript(Postrm))
+
+  protected def makeDebianMaintainerScript(scriptName: String, template: Option[URL] = None)(
+    tmpDir: File, loader: ServerLoader, replacements: Seq[(String, String)]): Option[File] = {
+    JavaAppStartScript.generateTemplate(scriptName, loader, replacements, template) map { scriptBits =>
+      val script = tmpDir / "tmp" / "bin" / ("debian-" + scriptName)
       IO.write(script, scriptBits)
-      Some(script)
+      script
     }
+  }
 
-  protected def makeDebianPrermScript(name: String, tmpDir: File): Option[File] = {
-    val scriptBits = JavaAppStartScript.generatePrerm(name)
-    val script = tmpDir / "tmp" / "bin" / "debian-prerm"
+  protected def makeEtcDefaultScript(name: String, tmpDir: File, source: java.net.URL, replacements: Seq[(String, String)]): Option[File] = {
+    val scriptBits = TemplateWriter.generateScript(source, replacements)
+    val script = tmpDir / "tmp" / "etc" / "default" / name
     IO.write(script, scriptBits)
     Some(script)
-  }
-
-  protected def makeDebianPostrmScript(name: String, tmpDir: File, loader: ServerLoader): Option[File] = {
-    JavaAppStartScript.generatePostrm(name, loader) match {
-      case Some(scriptBits) =>
-        val script = tmpDir / "tmp" / "bin" / "debian-postrm"
-        IO.write(script, scriptBits)
-        Some(script)
-      case None => None
-    }
-  }
-
-  protected def makeDebianPostinstScript(name: String, tmpDir: File, loader: ServerLoader): Option[File] = {
-    val scriptBits = JavaAppStartScript.generatePostinst(name, loader)
-    val script = tmpDir / "tmp" / "bin" / "debian-postinst"
-    IO.write(script, scriptBits)
-    Some(script)
-  }
-
-  protected def makeEtcDefaultScript(name: String, tmpDir: File, loader: ServerLoader, source: java.net.URL): Option[File] = {
-    loader match {
-      case Upstart => None
-      case SystemV => {
-        val scriptBits = TemplateWriter.generateScript(source, Seq.empty)
-        val script = tmpDir / "tmp" / "etc" / "default" / name
-        IO.write(script, scriptBits)
-        Some(script)
-      }
-    }
   }
 }

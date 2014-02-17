@@ -47,7 +47,7 @@ trait DebianKeys {
       """.stripMargin)
 
   val debianMakeStartScript = TaskKey[Option[File]]("makeStartScript", "Creates or discovers the start script used by this project")
-  val debianStartScriptReplacements = TaskKey[Seq[(String, String)]]("upstartScriptReplacements",
+  val debianScriptReplacements = TaskKey[Seq[(String, String)]]("upstartScriptReplacements",
     """|Replacements of template parameters used in the upstart script.
          |  Default supported templates:
          |  execScript - name of the script in /usr/bin
@@ -82,6 +82,10 @@ object Keys extends DebianKeys {
   def packageBin = sbt.Keys.packageBin
   def target = sbt.Keys.target
   def streams = sbt.Keys.streams
+
+  // file ownership
+  def appUser = linux.Keys.appUser
+  def appGroup = linux.Keys.appGroup
 
   //init script parameters
   def daemonUser = linux.Keys.daemonUser
