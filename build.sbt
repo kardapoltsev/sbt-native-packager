@@ -24,7 +24,6 @@ git.remoteRepo := "git@github.com:sbt/sbt-native-packager.git"
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 
 publishTo := Some(Resolver.url("Frumatic snapshots", url("http://nexus.frumatic.com/content/repositories/snapshots"))(Resolver.ivyStylePatterns))
-Bintray.settings
 
 publishMavenStyle := false
 
