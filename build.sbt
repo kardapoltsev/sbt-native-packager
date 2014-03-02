@@ -1,16 +1,5 @@
 sbtPlugin := true
 
-sbtVersion in Global := {
-  scalaBinaryVersion.value match {
-    case "2.10" => "0.13.0"
-    case "2.9.2" => "0.12.4"
-  }
-}
-
-scalaVersion in Global := "2.9.2"
-
-crossScalaVersions := Seq("2.9.2", "2.10.2")
-
 name := "sbt-native-packager"
 
 organization := "com.typesafe.sbt"
