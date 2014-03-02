@@ -4,6 +4,8 @@ package linux
 
 import Keys._
 import sbt._
+import sbt.Keys.{ normalizedName }
+import com.typesafe.sbt.packager.linux.LinuxPlugin.Users
 
 /**
  * Plugin trait containing all the generic values used for
@@ -25,7 +27,9 @@ trait LinuxPlugin extends Plugin {
       }
     },
     packageSummary in Linux <<= packageSummary,
-    packageDescription in Linux <<= packageDescription)
+    packageDescription in Linux <<= packageDescription,
+    daemonUser in Linux <<= normalizedName,
+    daemonGroup <<= daemonUser in Linux)
 
   /** DSL for packaging files into .deb */
   def packageMapping(files: (File, String)*) = LinuxPackageMapping(files)
@@ -36,6 +40,7 @@ trait LinuxPlugin extends Plugin {
    */
   def packageTemplateMapping(files: String*)(dir: File = new File(sys.props("java.io.tmpdir"))) = LinuxPackageMapping(files map ((dir, _)))
 
+  // TODO can the packager.MappingsHelper be used here?
   /**
    * @see #mapDirectoryAndContents
    * @param dirs - directories to map

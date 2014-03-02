@@ -36,12 +36,12 @@ trait RpmKeys {
   // SPEC
   val rpmSpecConfig = TaskKey[RpmSpec]("rpm-spec-config", "All the configuration for an RPM .spec file.")
   
- // SCRIPTS
+  // SCRIPTS
   val rpmScripts = SettingKey[RpmScripts]("rpm-scripts", "Configuration of pre- and post-integration scripts.")
 
   val rpmPretrans = SettingKey[Option[String]]("rpm-pretrans", "%pretrans scriptlet")
   val rpmPre = SettingKey[Option[String]]("rpm-pre", "%pre scriptlet")
-  val rpmVerifyscript = SettingKey[Option[String]]("rpm-verifyscipt", "%verifyscript scriptlet")
+  val rpmVerifyscript = SettingKey[Option[String]]("rpm-verifyscript", "%verifyscript scriptlet")
   val rpmPost = SettingKey[Option[String]]("rpm-post", "%post scriptlet")
   val rpmPosttrans = SettingKey[Option[String]]("rpm-posttrans", "%posttrans scriptlet")
   val rpmPreun = SettingKey[Option[String]]("rpm-preun", "%preun scriptlet")
@@ -49,6 +49,7 @@ trait RpmKeys {
 
   // Building
   val rpmLint = TaskKey[Unit]("rpm-lint", "Runs rpmlint program against the genreated RPM, if available.")
+  
 }
 
 /** Keys used in RPM Settings. */
@@ -72,6 +73,9 @@ object Keys extends RpmKeys {
   // Building
   def target = sbt.Keys.target
   def packageBin = sbt.Keys.packageBin
+  
+  //init script parameters
+  def serverLoading = linux.Keys.serverLoading
   
   def streams = sbt.Keys.streams  
 }

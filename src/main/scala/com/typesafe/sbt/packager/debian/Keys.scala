@@ -46,8 +46,8 @@ trait DebianKeys {
          |  version - app version
       """.stripMargin)
 
-  val debianMakeStartScript = TaskKey[Option[File]]("makeStartScript", "Creates or discovers the start script used by this project")
-  val debianStartScriptReplacements = TaskKey[Seq[(String, String)]]("upstartScriptReplacements",
+  @deprecated("use linuxScriptReplacements", "0.7.0")
+  val debianScriptReplacements = TaskKey[Seq[(String, String)]]("upstartScriptReplacements",
     """|Replacements of template parameters used in the upstart script.
          |  Default supported templates:
          |  execScript - name of the script in /usr/bin
@@ -61,9 +61,7 @@ trait DebianKeys {
          |  appMainClass - main class to start
          |  daemonUser - daemon user
       """.stripMargin)
-  val debianMakeEtcDefault = TaskKey[Option[File]]("makeEtcDefault", "Creates or discovers the /etc/default/ script")
 }
-
 
 /** Keys used for Debian specific settings. */
 object Keys extends DebianKeys {
@@ -84,7 +82,6 @@ object Keys extends DebianKeys {
   def streams = sbt.Keys.streams
 
   //init script parameters
-  def daemonUser = linux.Keys.daemonUser
   def serverLoading = linux.Keys.serverLoading
 
   val debianPackageInstallSize = TaskKey[Long]("debian-installed-size")

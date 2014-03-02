@@ -6,7 +6,7 @@ import Keys._
 import sbt._
 import sbt.Project.Initialize
 import sbt.Keys.{ mappings, target, name, mainClass, normalizedName, sourceDirectory }
-import linux.LinuxPackageMapping
+import com.typesafe.sbt.packager.linux.{ LinuxFileMetaData, LinuxPackageMapping }
 import SbtNativePackager._
 
 /**
@@ -63,6 +63,13 @@ object JavaAppPackaging {
       for {
         s <- script.toSeq
       } yield s -> ("bin/" + name + ".bat")
+    },
+    linuxPackageMappings in Debian <+= (normalizedName, defaultLinuxInstallLocation, target in Debian, daemonUser in Linux, daemonGroup in Linux) map {
+      (name, installLocation, target, user, group) =>
+        // create empty var/log directory
+        val d = target / installLocation
+        d.mkdirs()
+        LinuxPackageMapping(Seq(d -> (installLocation + "/" + name)), LinuxFileMetaData(user, group))
     })
 
   def makeRelativeClasspathNames(mappings: Seq[(File, String)]): Seq[String] =
@@ -79,8 +86,8 @@ object JavaAppPackaging {
     if (defines.isEmpty) None
     else {
       val defaultTemplateLocation = sourceDir / "templates" / "bash-template"
-      val scriptBits = 
-        if(defaultTemplateLocation.exists) JavaAppBashScript.generateScript(defines, defaultTemplateLocation.toURI.toURL)
+      val scriptBits =
+        if (defaultTemplateLocation.exists) JavaAppBashScript.generateScript(defines, defaultTemplateLocation.toURI.toURL)
         else JavaAppBashScript.generateScript(defines)
       val script = tmpDir / "tmp" / "bin" / name
       IO.write(script, scriptBits)
@@ -93,8 +100,8 @@ object JavaAppPackaging {
     if (replacements.isEmpty) None
     else {
       val defaultTemplateLocation = sourceDir / "templates" / "bat-template"
-      val scriptBits = 
-        if(defaultTemplateLocation.exists) JavaAppBatScript.generateScript(replacements, defaultTemplateLocation.toURI.toURL)
+      val scriptBits =
+        if (defaultTemplateLocation.exists) JavaAppBatScript.generateScript(replacements, defaultTemplateLocation.toURI.toURL)
         else JavaAppBatScript.generateScript(replacements)
       val script = tmpDir / "tmp" / "bin" / (name + ".bat")
       IO.write(script, scriptBits)

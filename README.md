@@ -64,7 +64,7 @@ they will use init.d and for MSIs, there will be windows service hooks.
 
 To try out the experimental java server archetype, add this to your `project/plugins.sbt`:
 
-    addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "0.7.0-M1")
+    addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "0.7.0-M2")
 
 Here's what to add to your `build.sbt`:
 
@@ -75,9 +75,10 @@ For debian packaging there are a few things generated for you
 * A template folder `/var/log/<app-name>`
 * A symlink `/installdir/<app-name>/logs` to `/var/log/<app-name` (Installdir is by default `/usr/share`)
 * Default `serverLoading` is `Upstart` (you can choose SystemV with `com.typesafe.sbt.packager.archetypes.ServerLoader.SystemV` )
-* Default `daemonUser` is _root_
-* If you choose different permissions than the default ones for your packages, _add-user_ and _remove-user_ statements will be added to
-the `postrm` and `postinst` control files
+* Default `appUser` is the normalized name of the package
+* Default `daemonUser` is `appUser`
+* _add-user_ and _remove-user_ statements will be added to
+the `postrm` and `postinst` control files for `appUser`
 
 ### By-hand packaging ###
 
