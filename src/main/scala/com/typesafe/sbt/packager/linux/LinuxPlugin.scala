@@ -28,7 +28,8 @@ trait LinuxPlugin extends Plugin {
     },
     packageSummary in Linux <<= packageSummary,
     packageDescription in Linux <<= packageDescription,
-    appUser <<= normalizedName, appGroup <<= appUser in Linux)
+    daemonUser in Linux <<= normalizedName,
+    daemonGroup <<= daemonUser in Linux)
 
   /** DSL for packaging files into .deb */
   def packageMapping(files: (File, String)*) = LinuxPackageMapping(files)
@@ -39,6 +40,7 @@ trait LinuxPlugin extends Plugin {
    */
   def packageTemplateMapping(files: String*)(dir: File = new File(sys.props("java.io.tmpdir"))) = LinuxPackageMapping(files map ((dir, _)))
 
+  // TODO can the packager.MappingsHelper be used here?
   /**
    * @see #mapDirectoryAndContents
    * @param dirs - directories to map
